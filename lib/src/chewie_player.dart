@@ -41,8 +41,8 @@ class Chewie extends StatefulWidget {
 
 class ChewieState extends State<Chewie> {
   bool _isFullScreen = false;
-  bool _wasPlayingBeforeFullScreen = false;
-  bool _resumeAppliedInFullScreen = false;
+  bool _isFullScreenRouteActive = false;
+  bool _isFullScreenRoutePopPending = false;
 
   bool get isControllerFullScreen => widget.controller.isFullScreen;
   late PlayerNotifier notifier;
@@ -88,22 +88,31 @@ class ChewieState extends State<Chewie> {
 
   Future<void> listener() async {
     if (isControllerFullScreen && !_isFullScreen) {
-      _wasPlayingBeforeFullScreen =
-          widget.controller.videoPlayerController.value.isPlaying;
-      _resumeAppliedInFullScreen = false;
       _isFullScreen = isControllerFullScreen;
+      if (kIsWeb && mounted) {
+        setState(() {});
+      }
       await _pushFullScreenWidget(context);
-    } else if (_isFullScreen) {
+    } else if (!isControllerFullScreen &&
+        _isFullScreenRouteActive &&
+        !_isFullScreenRoutePopPending) {
+      _isFullScreenRoutePopPending = true;
       Navigator.of(
         context,
         rootNavigator: widget.controller.useRootNavigator,
       ).pop();
-      _isFullScreen = false;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // A web platform view cannot safely be mounted in both the inline widget
+    // and the fullscreen route. Keep the inline layout in place while the
+    // fullscreen route owns the video surface.
+    if (kIsWeb && _isFullScreen) {
+      return const SizedBox.expand(child: ColoredBox(color: Colors.black));
+    }
+
     return ChewieControllerProvider(
       controller: widget.controller,
       child: ChangeNotifierProvider<PlayerNotifier>.value(
@@ -155,22 +164,6 @@ class ChewieState extends State<Chewie> {
       ),
     );
 
-    if (kIsWeb && !_resumeAppliedInFullScreen) {
-      _resumeAppliedInFullScreen = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        if (!mounted) return;
-        final vpc = widget.controller.videoPlayerController;
-        await vpc.pause();
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-        if (_wasPlayingBeforeFullScreen) {
-          await vpc.play();
-        } else {
-          await vpc.play();
-          await vpc.pause();
-        }
-      });
-    }
-
     if (widget.controller.routePageBuilder == null) {
       return _defaultRoutePageBuilder(
         context,
@@ -188,52 +181,81 @@ class ChewieState extends State<Chewie> {
   }
 
   Future<dynamic> _pushFullScreenWidget(BuildContext context) async {
+    final controller = widget.controller;
     final TransitionRoute<void> route = PageRouteBuilder<void>(
       pageBuilder: _fullScreenRoutePageBuilder,
     );
 
     onEnterFullScreen();
 
-    if (!widget.controller.allowedScreenSleep) {
+    if (!controller.allowedScreenSleep) {
       WakelockPlus.enable();
     }
 
     // Ask the browser to enter its native fullscreen. Must be called before the
     // first await so we are still inside the user-gesture event handler.
-    if (widget.controller.useNativeFullScreenOnWeb) {
+    if (controller.useNativeFullScreenOnWeb) {
       requestBrowserFullscreen();
     }
 
-    await Navigator.of(
-      context,
-      rootNavigator: widget.controller.useRootNavigator,
-    ).push(route);
+    try {
+      if (kIsWeb) {
+        // Let Flutter unmount the inline platform view before the fullscreen
+        // route mounts another view for the same player.
+        await WidgetsBinding.instance.endOfFrame;
+        if (!context.mounted || !controller.isFullScreen) {
+          return;
+        }
+      }
 
-    final wasPlaying = widget.controller.videoPlayerController.value.isPlaying;
+      _isFullScreenRouteActive = true;
+      _isFullScreenRoutePopPending = false;
+      await Navigator.of(
+        context,
+        rootNavigator: controller.useRootNavigator,
+      ).push(route);
+      _isFullScreenRouteActive = false;
 
-    if (kIsWeb) {
-      await _reInitializeControllers(wasPlaying);
+      if (kIsWeb) {
+        // Navigator.push completes as soon as the route is popped. Wait until
+        // its reverse transition has removed the fullscreen platform view
+        // before restoring the inline one.
+        await route.completed;
+      }
+    } finally {
       // Exit native browser fullscreen when the Chewie route pops (e.g. user
       // clicked the fullscreen button again). No-op if Escape was already used.
-      if (widget.controller.useNativeFullScreenOnWeb) {
+      if (controller.useNativeFullScreenOnWeb) {
         exitBrowserFullscreen();
       }
-    }
 
+      _restoreInlinePlayer();
+
+      if (controller.isFullScreen) {
+        controller.exitFullScreen();
+      }
+
+      if (!controller.allowedScreenSleep) {
+        WakelockPlus.disable();
+      }
+
+      SystemChrome.setEnabledSystemUIMode(
+        SystemUiMode.manual,
+        overlays: controller.systemOverlaysAfterFullScreen,
+      );
+      SystemChrome.setPreferredOrientations(
+        controller.deviceOrientationsAfterFullScreen,
+      );
+    }
+  }
+
+  void _restoreInlinePlayer() {
     _isFullScreen = false;
-    widget.controller.exitFullScreen();
-
-    if (!widget.controller.allowedScreenSleep) {
-      WakelockPlus.disable();
+    _isFullScreenRouteActive = false;
+    _isFullScreenRoutePopPending = false;
+    if (kIsWeb && mounted) {
+      setState(() {});
     }
-
-    SystemChrome.setEnabledSystemUIMode(
-      SystemUiMode.manual,
-      overlays: widget.controller.systemOverlaysAfterFullScreen,
-    );
-    SystemChrome.setPreferredOrientations(
-      widget.controller.deviceOrientationsAfterFullScreen,
-    );
   }
 
   void onEnterFullScreen() {
@@ -282,25 +304,6 @@ class ChewieState extends State<Chewie> {
       else {
         SystemChrome.setPreferredOrientations(DeviceOrientation.values);
       }
-    }
-  }
-
-  /// When viewing full screen on web, returning from full screen could cause
-  /// the original video element to lose the picture. We re-initialize the
-  /// controllers for web only when returning from full screen and preserve
-  /// the previous play/pause state.
-  Future<void> _reInitializeControllers(bool wasPlaying) async {
-    final prevPosition = widget.controller.videoPlayerController.value.position;
-
-    await widget.controller.videoPlayerController.initialize();
-    widget.controller._initialize();
-    await widget.controller.videoPlayerController.seekTo(prevPosition);
-
-    if (wasPlaying) {
-      await widget.controller.videoPlayerController.play();
-    } else {
-      await widget.controller.videoPlayerController.play();
-      await widget.controller.videoPlayerController.pause();
     }
   }
 }

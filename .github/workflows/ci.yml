@@ -90,6 +90,9 @@ jobs:
       - name: 🧪 Run Tests
         run: flutter test --no-pub --coverage --test-randomize-ordering-seed random
 
+      - name: 🌐 Run Web Tests
+        run: flutter test --no-pub --platform chrome test/web_fullscreen_test.dart
+
       - name: 📁 Upload coverage to Codecov
         uses: codecov/codecov-action@v7
         with:
