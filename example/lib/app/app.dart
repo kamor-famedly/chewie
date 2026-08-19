@@ -1,5 +1,6 @@
 import 'package:chewie/chewie.dart';
 import 'package:chewie_example/app/theme.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
@@ -50,10 +51,16 @@ class _ChewieDemoState extends State<ChewieDemo> {
     _videoPlayerController2 = VideoPlayerController.networkUrl(
       Uri.parse(srcs[currPlayIndex]),
     );
-    await Future.wait([
-      _videoPlayerController1.initialize(),
-      _videoPlayerController2.initialize(),
-    ]);
+    // On the web, media is best initialized (and played) from a user gesture:
+    // browsers block autoplay without one and may not even load media in a
+    // page opened in a background tab. The player is shown right away and the
+    // controls' play button initializes the controller on first tap.
+    if (!kIsWeb) {
+      await Future.wait([
+        _videoPlayerController1.initialize(),
+        _videoPlayerController2.initialize(),
+      ]);
+    }
     _createChewieController();
     setState(() {});
   }
@@ -120,7 +127,7 @@ class _ChewieDemoState extends State<ChewieDemo> {
 
     _chewieController = ChewieController(
       videoPlayerController: _videoPlayerController1,
-      autoPlay: true,
+      autoPlay: !kIsWeb,
       zoomAndPan: true,
       looping: true,
       progressIndicatorDelay: bufferDelay != null
@@ -201,10 +208,11 @@ class _ChewieDemoState extends State<ChewieDemo> {
               child: Center(
                 child:
                     _chewieController != null &&
-                        _chewieController!
-                            .videoPlayerController
-                            .value
-                            .isInitialized
+                        (kIsWeb ||
+                            _chewieController!
+                                .videoPlayerController
+                                .value
+                                .isInitialized)
                     ? Chewie(controller: _chewieController!)
                     : const Column(
                         mainAxisAlignment: MainAxisAlignment.center,
