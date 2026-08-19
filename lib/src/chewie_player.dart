@@ -43,6 +43,8 @@ class ChewieState extends State<Chewie> {
   bool _isFullScreen = false;
   bool _isFullScreenRouteActive = false;
   bool _isFullScreenRoutePopPending = false;
+  bool _pendingFullScreenReenter = false;
+  TransitionRoute<void>? _fullScreenRoute;
 
   bool get isControllerFullScreen => widget.controller.isFullScreen;
   late PlayerNotifier notifier;
@@ -77,12 +79,14 @@ class ChewieState extends State<Chewie> {
 
   @override
   void didUpdateWidget(Chewie oldWidget) {
-    if (oldWidget.controller != widget.controller) {
-      widget.controller.addListener(listener);
-    }
     super.didUpdateWidget(oldWidget);
-    if (_isFullScreen != isControllerFullScreen) {
-      widget.controller._isFullScreen = _isFullScreen;
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(listener);
+      widget.controller.addListener(listener);
+      // Carry the current fullscreen presentation over to the new controller.
+      if (_isFullScreen != isControllerFullScreen) {
+        widget.controller._isFullScreen = _isFullScreen;
+      }
     }
   }
 
@@ -93,14 +97,27 @@ class ChewieState extends State<Chewie> {
         setState(() {});
       }
       await _pushFullScreenWidget(context);
+    } else if (isControllerFullScreen && _isFullScreenRoutePopPending) {
+      // Fullscreen was requested again while the previous fullscreen route is
+      // still tearing down; honored once the inline player is restored.
+      _pendingFullScreenReenter = true;
     } else if (!isControllerFullScreen &&
         _isFullScreenRouteActive &&
         !_isFullScreenRoutePopPending) {
+      final route = _fullScreenRoute;
+      if (route == null) {
+        return;
+      }
       _isFullScreenRoutePopPending = true;
-      Navigator.of(
+      final navigator = Navigator.of(
         context,
         rootNavigator: widget.controller.useRootNavigator,
-      ).pop();
+      );
+      // Exiting fullscreen dismisses everything shown above the fullscreen
+      // route (options sheets, dialogs); popping only the topmost route could
+      // close such a sheet instead and leave the fullscreen route stuck.
+      navigator.popUntil((r) => r == route);
+      navigator.pop();
     }
   }
 
@@ -182,8 +199,20 @@ class ChewieState extends State<Chewie> {
 
   Future<dynamic> _pushFullScreenWidget(BuildContext context) async {
     final controller = widget.controller;
+    // The default fullscreen page has no transition animation, so on the web
+    // drop the route's transition durations: the reverse transition is dead
+    // time during which the video surface can live in neither the (already
+    // popped) fullscreen route nor the inline player. Custom route builders
+    // keep the default durations for their own animations.
+    final bool instantTransition = kIsWeb && controller.routePageBuilder == null;
     final TransitionRoute<void> route = PageRouteBuilder<void>(
       pageBuilder: _fullScreenRoutePageBuilder,
+      transitionDuration: instantTransition
+          ? Duration.zero
+          : const Duration(milliseconds: 300),
+      reverseTransitionDuration: instantTransition
+          ? Duration.zero
+          : const Duration(milliseconds: 300),
     );
 
     onEnterFullScreen();
@@ -210,6 +239,7 @@ class ChewieState extends State<Chewie> {
 
       _isFullScreenRouteActive = true;
       _isFullScreenRoutePopPending = false;
+      _fullScreenRoute = route;
       await Navigator.of(
         context,
         rootNavigator: controller.useRootNavigator,
@@ -223,15 +253,27 @@ class ChewieState extends State<Chewie> {
         await route.completed;
       }
     } finally {
+      _fullScreenRoute = null;
+      final bool reenter = _pendingFullScreenReenter && controller.isFullScreen;
+      _pendingFullScreenReenter = false;
+
       // Exit native browser fullscreen when the Chewie route pops (e.g. user
-      // clicked the fullscreen button again). No-op if Escape was already used.
-      if (controller.useNativeFullScreenOnWeb) {
+      // clicked the fullscreen button again). No-op if Escape was already
+      // used. Skipped when fullscreen was requested again during teardown.
+      if (controller.useNativeFullScreenOnWeb && !reenter) {
         exitBrowserFullscreen();
       }
 
       _restoreInlinePlayer();
 
-      if (controller.isFullScreen) {
+      if (reenter) {
+        // Handle the queued request now that the inline player is back.
+        scheduleMicrotask(() {
+          if (mounted) {
+            listener();
+          }
+        });
+      } else if (controller.isFullScreen) {
         controller.exitFullScreen();
       }
 
