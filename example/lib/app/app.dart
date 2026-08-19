@@ -35,10 +35,12 @@ class _ChewieDemoState extends State<ChewieDemo> {
     super.dispose();
   }
 
+  // All sources send Access-Control-Allow-Origin, so the example also plays
+  // on Flutter web (the previously used gtv-videos-bucket does not).
   List<String> srcs = [
-    "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-    "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-    "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+    "https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4",
+    "https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4",
+    "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
   ];
 
   Future<void> initializePlayer() async {
