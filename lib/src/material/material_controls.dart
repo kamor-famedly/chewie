@@ -510,6 +510,7 @@ class _MaterialControlsState extends State<MaterialControls>
 
     if (chewieController.showControlsOnInitialize) {
       _initTimer = Timer(const Duration(milliseconds: 200), () {
+        if (!mounted) return;
         setState(() {
           notifier.hideStuff = false;
         });
@@ -525,6 +526,7 @@ class _MaterialControlsState extends State<MaterialControls>
       _showAfterExpandCollapseTimer = Timer(
         const Duration(milliseconds: 300),
         () {
+          if (!mounted) return;
           setState(() {
             _cancelAndRestartTimer();
           });

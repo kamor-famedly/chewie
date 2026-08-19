@@ -475,6 +475,7 @@ class _MaterialDesktopControlsState extends State<MaterialDesktopControls>
 
     if (chewieController.showControlsOnInitialize) {
       _initTimer = Timer(const Duration(milliseconds: 200), () {
+        if (!mounted) return;
         setState(() {
           notifier.hideStuff = false;
         });
@@ -492,6 +493,7 @@ class _MaterialDesktopControlsState extends State<MaterialDesktopControls>
     _showAfterExpandCollapseTimer = Timer(
       const Duration(milliseconds: 300),
       () {
+        if (!mounted) return;
         setState(() {
           _cancelAndRestartTimer();
         });
@@ -527,6 +529,7 @@ class _MaterialDesktopControlsState extends State<MaterialDesktopControls>
         ? ChewieController.defaultHideControlsTimer
         : chewieController.hideControlsTimer;
     _hideTimer = Timer(hideControlsTimer, () {
+      if (!mounted) return;
       setState(() {
         notifier.hideStuff = true;
       });

@@ -597,6 +597,7 @@ class _CupertinoControlsState extends State<CupertinoControls>
 
     if (chewieController.showControlsOnInitialize) {
       _initTimer = Timer(const Duration(milliseconds: 200), () {
+        if (!mounted) return;
         setState(() {
           notifier.hideStuff = false;
         });
@@ -610,6 +611,7 @@ class _CupertinoControlsState extends State<CupertinoControls>
 
       chewieController.toggleFullScreen();
       _expandCollapseTimer = Timer(const Duration(milliseconds: 300), () {
+        if (!mounted) return;
         setState(() {
           _cancelAndRestartTimer();
         });
@@ -690,6 +692,7 @@ class _CupertinoControlsState extends State<CupertinoControls>
     // Restoring the video speed to selected speed
     // A delay of 1 second is added to ensure a smooth transition of speed after reversing the video as reversing is an asynchronous function
     Future.delayed(const Duration(milliseconds: 1000), () {
+      if (!mounted) return;
       controller.setPlaybackSpeed(selectedSpeed);
     });
   }
@@ -703,6 +706,7 @@ class _CupertinoControlsState extends State<CupertinoControls>
     // Restoring the video speed to selected speed
     // A delay of 1 second is added to ensure a smooth transition of speed after forwarding the video as forwaring is an asynchronous function
     Future.delayed(const Duration(milliseconds: 1000), () {
+      if (!mounted) return;
       controller.setPlaybackSpeed(selectedSpeed);
     });
   }
@@ -712,6 +716,7 @@ class _CupertinoControlsState extends State<CupertinoControls>
         ? ChewieController.defaultHideControlsTimer
         : chewieController.hideControlsTimer;
     _hideTimer = Timer(hideControlsTimer, () {
+      if (!mounted) return;
       setState(() {
         notifier.hideStuff = true;
       });
