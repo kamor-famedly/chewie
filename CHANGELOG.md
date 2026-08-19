@@ -1,5 +1,11 @@
 ## [Unreleased]
 * 🛠️ Web: preserve a single video player across fullscreen transitions instead of re-initializing its controller.
+* 🛠️ Exiting fullscreen now dismisses sheets and dialogs shown above the fullscreen route instead of popping only the topmost one, which could leave fullscreen permanently stuck.
+* 🛠️ Web: a fullscreen toggle during the exit transition is queued and honored instead of dropped, and the default fullscreen route (which has no visible transition animation) now switches instantly.
+* 🛠️ Web: the browser reliably leaves native fullscreen when a fullscreen request is cancelled right away, and denied requests no longer cause unhandled promise rejections.
+* 🛠️ `Chewie` now detaches its fullscreen listener from the old controller when its controller is swapped.
+* 🛠️ Controls callbacks (timers, sheet continuations) are guarded against running after the controls are disposed, e.g. when exiting fullscreen force-closes an open options sheet.
+* 📖 Example: switched to CORS-enabled video sources so the example also plays on Flutter web.
 
 ## [1.15.0]
 * 🌐 [#946](https://github.com/fluttercommunity/chewie/pull/946): Web: enter the browser's native (OS-level) fullscreen via the Fullscreen API instead of only expanding the Flutter view inside the browser window. Pressing Escape to leave browser fullscreen also exits Chewie's fullscreen. Controlled by the new `ChewieController.useNativeFullScreenOnWeb` flag (defaults to `true`; no effect on non-web platforms). Thanks [Ortes](https://github.com/Ortes).
