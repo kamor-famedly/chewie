@@ -7,8 +7,16 @@ import 'package:video_player_platform_interface/video_player_platform_interface.
 /// how often playback is toggled and how many video surfaces are mounted at
 /// the same time.
 class FakeVideoPlayerPlatform extends VideoPlayerPlatform {
+  FakeVideoPlayerPlatform({this.pauseOnSurfaceUnmount = false});
+
+  /// Emulates browsers, which pause a video element that is removed from the
+  /// DOM: unmounting the surface of a playing player emits an
+  /// `isPlayingStateUpdate(false)` event, without counting as a pause() call.
+  final bool pauseOnSurfaceUnmount;
+
   final surfaceTracker = SurfaceTracker();
   final _eventControllers = <int, StreamController<VideoEvent>>{};
+  final _playing = <int>{};
   var createCount = 0;
   var playCount = 0;
   var pauseCount = 0;
@@ -40,7 +48,22 @@ class FakeVideoPlayerPlatform extends VideoPlayerPlatform {
 
   @override
   Widget buildViewWithOptions(VideoViewOptions options) {
-    return _TrackedVideoSurface(tracker: surfaceTracker);
+    return _TrackedVideoSurface(
+      tracker: surfaceTracker,
+      onUnmounted: () => _surfaceUnmounted(options.playerId),
+    );
+  }
+
+  void _surfaceUnmounted(int playerId) {
+    if (!pauseOnSurfaceUnmount || !_playing.remove(playerId)) {
+      return;
+    }
+    _eventControllers[playerId]?.add(
+      VideoEvent(
+        eventType: VideoEventType.isPlayingStateUpdate,
+        isPlaying: false,
+      ),
+    );
   }
 
   @override
@@ -52,11 +75,13 @@ class FakeVideoPlayerPlatform extends VideoPlayerPlatform {
   @override
   Future<void> pause(int playerId) async {
     pauseCount++;
+    _playing.remove(playerId);
   }
 
   @override
   Future<void> play(int playerId) async {
     playCount++;
+    _playing.add(playerId);
   }
 
   @override
@@ -106,9 +131,10 @@ class SurfaceTracker {
 }
 
 class _TrackedVideoSurface extends StatefulWidget {
-  const _TrackedVideoSurface({required this.tracker});
+  const _TrackedVideoSurface({required this.tracker, required this.onUnmounted});
 
   final SurfaceTracker tracker;
+  final VoidCallback onUnmounted;
 
   @override
   State<_TrackedVideoSurface> createState() => _TrackedVideoSurfaceState();
@@ -124,6 +150,7 @@ class _TrackedVideoSurfaceState extends State<_TrackedVideoSurface> {
   @override
   void dispose() {
     widget.tracker.unmount();
+    widget.onUnmounted();
     super.dispose();
   }
 

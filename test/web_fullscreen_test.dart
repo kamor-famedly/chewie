@@ -19,7 +19,7 @@ void main() {
 
   setUp(() async {
     originalVideoPlayerPlatform = VideoPlayerPlatform.instance;
-    videoPlayerPlatform = FakeVideoPlayerPlatform();
+    videoPlayerPlatform = FakeVideoPlayerPlatform(pauseOnSurfaceUnmount: true);
     VideoPlayerPlatform.instance = videoPlayerPlatform;
 
     videoPlayerController = VideoPlayerController.networkUrl(
@@ -67,6 +67,7 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(chewieController.isFullScreen, isTrue);
+        expect(videoPlayerController.value.isPlaying, isTrue);
         expect(videoPlayerPlatform.createCount, 1);
         expect(videoPlayerPlatform.surfaceTracker.active, 1);
 
@@ -75,12 +76,16 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(chewieController.isFullScreen, isFalse);
+        expect(videoPlayerController.value.isPlaying, isTrue);
         expect(videoPlayerPlatform.createCount, 1);
         expect(videoPlayerPlatform.surfaceTracker.active, 1);
       }
 
       expect(videoPlayerPlatform.surfaceTracker.maximumActive, 1);
       expect(videoPlayerController.value.isPlaying, isTrue);
+      // The keyed player subtree is reparented between the inline widget and
+      // the fullscreen route, so the surface is never unmounted, the browser
+      // never pauses it, and chewie never needs to touch playback.
       expect(videoPlayerPlatform.playCount, 0);
       expect(videoPlayerPlatform.pauseCount, 0);
 
@@ -146,6 +151,9 @@ void main() {
     expect(chewieController.isFullScreen, isFalse);
     expect(find.byKey(homeKey), findsOneWidget);
     expect(videoPlayerPlatform.surfaceTracker.maximumActive, 1);
+
+    // Stop the position-polling timer that resuming playback started.
+    await videoPlayerController.pause();
   });
 
   testWidgets('an immediately cancelled enter restores the inline player', (
@@ -158,6 +166,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(chewieController.isFullScreen, isFalse);
+    expect(videoPlayerController.value.isPlaying, isTrue);
     expect(videoPlayerPlatform.surfaceTracker.active, 1);
     expect(videoPlayerPlatform.surfaceTracker.maximumActive, 1);
 
@@ -165,6 +174,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(chewieController.isFullScreen, isTrue);
     expect(videoPlayerPlatform.surfaceTracker.active, 1);
+
+    chewieController.exitFullScreen();
+    await tester.pumpAndSettle();
+    // Stop the position-polling timer that resuming playback started.
+    await videoPlayerController.pause();
   });
 
   testWidgets('a fullscreen request during exit teardown is honored', (
@@ -180,12 +194,17 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(chewieController.isFullScreen, isTrue);
+    expect(videoPlayerController.value.isPlaying, isTrue);
     expect(videoPlayerPlatform.surfaceTracker.active, 1);
     expect(videoPlayerPlatform.surfaceTracker.maximumActive, 1);
 
     chewieController.exitFullScreen();
     await tester.pumpAndSettle();
     expect(chewieController.isFullScreen, isFalse);
+    expect(videoPlayerController.value.isPlaying, isTrue);
+
+    // Stop the position-polling timer that resuming playback started.
+    await videoPlayerController.pause();
   });
 
   testWidgets(
@@ -220,6 +239,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(customController.isFullScreen, isFalse);
 
+      // Stop the position-polling timer that resuming playback started.
+      await videoPlayerController.pause();
       customController.dispose();
     },
   );
@@ -266,6 +287,8 @@ void main() {
     await tester.pump(const Duration(seconds: 4));
     expect(videoPlayerPlatform.surfaceTracker.active, 1);
 
+    // Stop the position-polling timer that resuming playback started.
+    await videoPlayerController.pause();
     controlsController.dispose();
   });
 
@@ -274,11 +297,11 @@ void main() {
   ) async {
     await pumpChewie(tester, chewieController);
 
-    // Unmount while the enter handoff (end-of-frame wait) is in flight.
+    // Unmount right after an enter, while the push is settling.
     chewieController.enterFullScreen();
     await tester.pumpWidget(const SizedBox());
     await tester.pumpAndSettle();
-    expect(chewieController.isFullScreen, isFalse);
+    chewieController.exitFullScreen();
 
     // And again while an exit is in flight.
     await pumpChewie(tester, chewieController);

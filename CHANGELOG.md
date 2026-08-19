@@ -1,5 +1,5 @@
 ## [Unreleased]
-* 🛠️ Web: preserve a single video player across fullscreen transitions instead of re-initializing its controller.
+* 🛠️ Web: preserve a single video player across fullscreen transitions instead of re-initializing its controller. The live player subtree is reparented between the inline widget and the fullscreen route, so the underlying video element never leaves the DOM and playback continues uninterrupted — matching how native web players behave.
 * 🛠️ Exiting fullscreen now dismisses sheets and dialogs shown above the fullscreen route instead of popping only the topmost one, which could leave fullscreen permanently stuck.
 * 🛠️ Web: a fullscreen toggle during the exit transition is queued and honored instead of dropped, and the default fullscreen route (which has no visible transition animation) now switches instantly.
 * 🛠️ Web: the browser reliably leaves native fullscreen when a fullscreen request is cancelled right away, and denied requests no longer cause unhandled promise rejections.
