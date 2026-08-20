@@ -8,9 +8,9 @@ On web the fullscreen surface handoff was redesigned: the live player subtree ca
 
 ## Probable bugs
 
-### B1 — Fullscreen entry crashes on iPhone Safari
+### B1 — Fullscreen entry crashes in every iOS browser
 
-`requestBrowserFullscreen` (`lib/src/web_fullscreen_impl.dart`) calls `documentElement.requestFullscreen()` unconditionally. iOS Safari on iPhone does not implement element fullscreen, so the js_interop call throws a synchronous `TypeError` before the `try` block in `_pushFullScreenWidget`, aborting fullscreen entry before the route is pushed. Fix: guard on `document.fullscreenEnabled` and wrap the call in try/catch, degrading to in-page fullscreen.
+`requestBrowserFullscreen` (`lib/src/web_fullscreen_impl.dart`) calls `documentElement.requestFullscreen()` unconditionally. iPhone WebKit does not implement element fullscreen — and every iOS browser, including Chrome, is WebKit by Apple mandate — so the js_interop call throws a synchronous `TypeError` before the `try` block in `_pushFullScreenWidget`, aborting fullscreen entry before the route is pushed. Confirmed reproduced in the field on Chrome for iOS. Fix: guard on `document.fullscreenEnabled` and wrap the call in try/catch, degrading to in-page fullscreen.
 
 ### B2 — VideoProgressBar loses its controller listener on reparent
 
