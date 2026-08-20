@@ -7,12 +7,20 @@ import 'package:video_player_platform_interface/video_player_platform_interface.
 /// how often playback is toggled and how many video surfaces are mounted at
 /// the same time.
 class FakeVideoPlayerPlatform extends VideoPlayerPlatform {
-  FakeVideoPlayerPlatform({this.pauseOnSurfaceUnmount = false});
+  FakeVideoPlayerPlatform({
+    this.pauseOnSurfaceUnmount = false,
+    this.initializeOnCreate = true,
+  });
 
   /// Emulates browsers, which pause a video element that is removed from the
   /// DOM: unmounting the surface of a playing player emits an
   /// `isPlayingStateUpdate(false)` event, without counting as a pause() call.
   final bool pauseOnSurfaceUnmount;
+
+  /// Whether players emit their `initialized` event as soon as they are
+  /// created. Disable to emit it manually with [emitInitialized], emulating
+  /// media that finishes loading later.
+  final bool initializeOnCreate;
 
   final surfaceTracker = SurfaceTracker();
   final _eventControllers = <int, StreamController<VideoEvent>>{};
@@ -31,14 +39,21 @@ class FakeVideoPlayerPlatform extends VideoPlayerPlatform {
     // ignore: close_sinks
     final eventController = StreamController<VideoEvent>();
     _eventControllers[playerId] = eventController;
-    eventController.add(
+    if (initializeOnCreate) {
+      emitInitialized(playerId);
+    }
+    return playerId;
+  }
+
+  /// Completes initialization of [playerId] with a one minute 1920x1080 video.
+  void emitInitialized(int playerId) {
+    _eventControllers[playerId]!.add(
       VideoEvent(
         eventType: VideoEventType.initialized,
         duration: const Duration(minutes: 1),
         size: const Size(1920, 1080),
       ),
     );
-    return playerId;
   }
 
   @override

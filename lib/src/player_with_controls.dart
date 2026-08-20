@@ -39,11 +39,18 @@ class PlayerWithControls extends StatelessWidget {
           if (chewieController.placeholder != null)
             chewieController.placeholder!,
           Center(
-            child: AspectRatio(
-              aspectRatio:
-                  chewieController.aspectRatio ??
-                  chewieController.videoPlayerController.value.aspectRatio,
+            // The aspect ratio is only known once the controller is
+            // initialized, which can happen after the first build (e.g. when
+            // playback starts from a user gesture on the web).
+            child: ValueListenableBuilder<VideoPlayerValue>(
+              valueListenable: chewieController.videoPlayerController,
               child: VideoPlayer(chewieController.videoPlayerController),
+              builder: (BuildContext context, VideoPlayerValue value, Widget? child) =>
+                  AspectRatio(
+                    aspectRatio:
+                        chewieController.aspectRatio ?? value.aspectRatio,
+                    child: child,
+                  ),
             ),
           ),
           if (chewieController.overlay != null) chewieController.overlay!,
