@@ -56,3 +56,4 @@ coverage/*
 .windsurf/
 .aide/
 *.artifact.md
+graphify-out/
